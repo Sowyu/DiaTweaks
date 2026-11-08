@@ -22,6 +22,10 @@ static void DPSurvived(void) {
     [DPState writeToURL:DPStateURL error:nil];
 }
 
+// Dia quits without posting NSApplicationWillTerminateNotification, so a quit that comes before DPSurviveSeconds would
+// still look like a crash and two quick restarts of a healthy Dia would turn safe mode on. atexit runs on a normal quit.
+static void DPSurvivedAtExit(void) { DPSurvived(); }
+
 void DPBeginLaunch(void) {
     Dl_info info;
     dladdr((const void *)DPBeginLaunch, &info);
@@ -37,6 +41,7 @@ void DPBeginLaunch(void) {
     [DPState writeToURL:DPStateURL error:nil];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, DPSurviveSeconds * NSEC_PER_SEC), dispatch_get_main_queue(), ^{ DPSurvived(); });
     DPOnQuit(^{ DPSurvived(); });
+    atexit(DPSurvivedAtExit);
 }
 
 void DPLeaveSafeMode(void) {
