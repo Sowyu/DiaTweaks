@@ -9,6 +9,8 @@
 #define DPDiaTrafficLights      "_TtC5ARCUI21WindowStandardButtons"
 #define DPDiaSidebarFooter      "_TtC10TabSidebar26SidebarContainerFooterView"
 #define DPDiaSidebarController  "_TtC10TabSidebar30SidebarContainerViewController"
+#define DPDiaSidebarRoot        "_TtC10TabSidebarP33_1737451677CA9CA733FCF78BBDD9DE8A24SidebarContainerRootView"
+#define DPDiaSidebarResize      "_TtC10TabSidebar23SidebarResizeRegionView"
 #define DPDiaTabStripController "_TtC8TabStrip31TabStripContainerViewController"
 #define DPDiaTabStrip           "_TtCC8TabStrip31TabStripContainerViewControllerP33_466228EC43BE4F33691D8E9BB7BFDE208RootView"
 #define DPDiaWindowBackground   "_TtGC5ARCUI25WindowFrameBackgroundViewC15WindowTreatment24WindowBackgroundBaseView_"

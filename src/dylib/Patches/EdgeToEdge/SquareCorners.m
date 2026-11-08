@@ -91,7 +91,8 @@ BOOL DPCornersRound(CALayer *layer, BOOL right) {
 }
 
 BOOL DPBesideSidebar(NSView *container) {
-    return NSMinX(container.frame) > DPWindowPadding + 1 && !DPChatCard(container);
+    CGFloat gap = DPSidebarOnRight.on ? NSWidth(container.superview.bounds) - NSMaxX(container.frame) : NSMinX(container.frame);
+    return gap > DPWindowPadding + 1 && !DPChatCard(container);
 }
 
 // A full screen window has square corners, so the page squares the ones it shares with the screen.
@@ -100,6 +101,7 @@ BOOL DPFullScreen(NSView *container) {
 }
 
 // `base` is Dia's radius, `grow` how much rounder the page is, `left` and `right` how far each side has gone square.
+// The sidebar's side is worked out as the left, then swapped if Sidebar on Right put it on the right.
 static CALayer *DPCornerShape(NSView *container, CGFloat *base, CGFloat *grow, CGFloat *left, CGFloat *right) {
     CALayer *layer = DPRoundedContent(container).layer;
     if (!layer) return nil;
@@ -108,6 +110,10 @@ static CALayer *DPCornerShape(NSView *container, CGFloat *base, CGFloat *grow, C
     // Rounder window corners don't reach the corners by the sidebar.
     CGFloat growth = DPWindowCornerGrowth(container.window);
     if (growth > 0 && layer.cornerRadius > 0 && DPBesideSidebar(container)) *left = 1 - (1 - *left) * (layer.cornerRadius - growth) / layer.cornerRadius;
+    if (DPSidebarOnRight.on) {
+        CGFloat sidebarSide = *left;
+        *left = *right, *right = sidebarSide;
+    }
     *base = DPBaseCornerRadius(container) ?: layer.cornerRadius;
     *grow = *base > 0 ? layer.cornerRadius / *base : 1;
     return layer;
@@ -181,7 +187,7 @@ static NSString *DPVerifySquareCorners(DPPatch *patch) {
         if (!layer) return @"no rounded web content found";
         if (!DPBesideSidebar(container)) continue;
         BOOL square = patch->on && DPEdgeToEdge.on;
-        if (DPCornersRound(layer, NO) == square) return square ? @"corners by the sidebar are round" : @"corners by the sidebar are square";
+        if (DPCornersRound(layer, DPSidebarOnRight.on) == square) return square ? @"corners by the sidebar are round" : @"corners by the sidebar are square";
     }
     return nil;
 }
