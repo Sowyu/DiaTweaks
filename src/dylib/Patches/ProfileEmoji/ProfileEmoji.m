@@ -10,7 +10,7 @@ static char DPLabelKey;
 // A symbol this macOS doesn't have counts as no icon, so Dia's dot shows instead of the saved name.
 static NSString *DPEmoji(NSString *spaceID) {
     NSString *icon = DPProfileEmoji.on && spaceID ? DPSavedIcon(spaceID) : nil;
-    if ([icon hasPrefix:DPSymbolPrefix] && ![NSImage imageWithSystemSymbolName:[icon substringFromIndex:DPSymbolPrefix.length] accessibilityDescription:nil]) return nil;
+    if ([icon hasPrefix:DPSymbolPrefix] && !DPSymbolNamed([icon substringFromIndex:DPSymbolPrefix.length])) return nil;
     return icon;
 }
 
@@ -22,7 +22,7 @@ static NSString *DPSpaceIDOf(NSView *view, NSDictionary *views) {
 
 static NSImage *DPSymbolImage(NSString *icon, CGFloat size) {
     if (![icon hasPrefix:DPSymbolPrefix]) return nil;
-    NSImage *image = [NSImage imageWithSystemSymbolName:[icon substringFromIndex:DPSymbolPrefix.length] accessibilityDescription:nil];
+    NSImage *image = DPSymbolNamed([icon substringFromIndex:DPSymbolPrefix.length]);
     return [image imageWithSymbolConfiguration:[NSImageSymbolConfiguration configurationWithPointSize:size weight:NSFontWeightSemibold]];
 }
 

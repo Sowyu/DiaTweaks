@@ -35,9 +35,14 @@ GROUP_TABS := $(addprefix src/dylib/Commands/GroupTabs/,Plan.m Title.m Registrab
 build/group-tabs: tests/group-tabs.m $(GROUP_TABS) | build
 	clang $(CFLAGS) -Isrc/dylib -framework AppKit -o $@ $^
 
-# Checks that need no Dia: the Group Tabs by Domain logic, and that Settings shows each tweak like its neighbours.
-check: build/group-tabs build/patches.json
+build/profile-symbols: tests/profile-symbols.m src/dylib/Patches/ProfileEmoji/Symbols.m | build
+	clang $(CFLAGS) -Isrc/dylib -framework AppKit -o $@ $^
+
+# Checks that need no Dia: the Group Tabs by Domain logic, Profile Emoji's symbol search, and that Settings shows each
+# tweak like its neighbours.
+check: build/group-tabs build/profile-symbols build/patches.json
 	build/group-tabs
+	build/profile-symbols
 	scripts/check-patches
 
 test: build/DiaPatches.dylib
