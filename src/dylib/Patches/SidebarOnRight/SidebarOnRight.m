@@ -2,6 +2,7 @@
 #include <mach-o/dyld.h>
 
 extern DPPatch DPSidebarOnRight;
+void DPInstallSidebarPopups(void);
 
 static char DPFrameKey, DPDiaFrameKey;
 static NSHashTable<NSView *> *DPMirrored;
@@ -101,6 +102,7 @@ static void DPInstallSidebarOnRight(void) {
     DPHookClass(NSPanGestureRecognizer.class, @selector(translationInView:), (IMP)DPPan_translationInView);
     DPFindHoverReads();
     if (DPHoverReads[0]) DPHookClass(object_getClass(NSEvent.class), @selector(mouseLocation), (IMP)DPEvent_mouseLocation);
+    DPInstallSidebarPopups();
 }
 
 DP_PATCH(DPSidebarOnRight) {

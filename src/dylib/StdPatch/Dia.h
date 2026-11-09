@@ -20,6 +20,8 @@
 #define DPDiaPinnedExtension    "_TtC16PinnedExtensions19PinnedExtensionView"
 #define DPDiaPinnedTab          "_TtC5TabUI15TabDockItemView"
 #define DPDiaPinnedTabCard      "_TtC12TabPreviewUIP33_0170D9E3E5C7E28EB9CF80A3A0FFD69325TabHoverMenuPopoverWindow"
+#define DPDiaOverflowMenu       "_TtC11TabListMenuP33_DA57B2E31D2FA1044951A5A2FE1E050017OverflowMenuPanel"
+#define DPDiaDropdownPanel      "_TtC5ARCUIP33_82D1C1E907D245FAA78007B44225262C21DropdownSelectorPanel"
 #define DPDiaPinnedTabOutline   "_TtC5TabUIP33_CFF5B89D7BC9743BBA6108D119E2E37020SelectionOutlineView"
 #define DPDiaContentPane        "_TtC11ContentPane15ContentPaneView"
 #define DPDiaContentContainer   "_TtC6Window20ContentContainerView"
