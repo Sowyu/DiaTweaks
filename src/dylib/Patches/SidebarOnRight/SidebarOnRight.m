@@ -4,9 +4,11 @@ extern DPPatch DPSidebarOnRight;
 
 static char DPFrameKey, DPDiaFrameKey;
 static NSHashTable<NSView *> *DPMirrored;
+static BOOL DPInMouseMonitor;
 
 // Dia lays the window out with the sidebar on the left. Each of these views is flipped across its parent as Dia places
-// it: the page, the sidebar, the sidebar's resize edge inside it, and the window backgrounds behind them.
+// it: the page, the sidebar, the sidebar's resize edge inside it, the sidebar that floats out while it's hidden, and the
+// window backgrounds behind them.
 static BOOL DPShouldMirror(NSView *view) {
     if (DPIsKind(view, DPDiaWindowBackgroundTile)) return DPIsKind(view.superview, DPDiaWindowBackground);
     return YES;
@@ -34,6 +36,25 @@ static NSPoint DPPan_translationInView(NSPanGestureRecognizer *self, SEL _cmd, N
     return point;
 }
 
+// While the sidebar is hidden, Dia floats it out when a mouse-moved monitor finds the cursor at the window's left edge.
+// That monitor reads where the cursor is in the window, so inside mouse-moved monitors the window answers mirrored.
+static id DPEvent_addLocalMonitor(id self, SEL _cmd, NSEventMask mask, NSEvent *(^handler)(NSEvent *)) {
+    if (mask != NSEventMaskMouseMoved || !handler) return DPCallOriginal(DPEvent_addLocalMonitor, self, mask, handler);
+    return DPCallOriginal(DPEvent_addLocalMonitor, self, mask, ^NSEvent *(NSEvent *event) {
+        BOOL outer = DPInMouseMonitor;
+        DPInMouseMonitor = YES;
+        NSEvent *result = handler(event);
+        DPInMouseMonitor = outer;
+        return result;
+    });
+}
+
+static NSPoint DPWindow_convertPointFromScreen(NSWindow *self, SEL _cmd, NSPoint point) {
+    NSPoint inWindow = DPCallOriginal(DPWindow_convertPointFromScreen, self, point);
+    if (DPInMouseMonitor && DPSidebarOnRight.on) inWindow.x = NSWidth(self.frame) - inWindow.x;
+    return inWindow;
+}
+
 static void DPApplySidebarOnRight(DPPatch *patch) {
     for (NSView *view in DPMirrored.allObjects) {
         view.frame = [DPGet(view, &DPDiaFrameKey) rectValue];
@@ -53,9 +74,11 @@ static NSString *DPVerifySidebarOnRight(DPPatch *patch) {
 
 static void DPInstallSidebarOnRight(void) {
     DPMirrored = [NSHashTable weakObjectsHashTable];
-    for (const char *const *name = DPClasses(DPDiaContentContainer, DPDiaSidebarRoot, DPDiaSidebarResize, DPDiaWindowBackgroundTile); *name; name++)
+    for (const char *const *name = DPClasses(DPDiaContentContainer, DPDiaSidebarRoot, DPDiaSidebarResize, DPDiaFloatingSidebar, DPDiaWindowBackgroundTile); *name; name++)
         DPHook(*name, @selector(setFrame:), (IMP)DPMirror_setFrame);
     DPHookClass(NSPanGestureRecognizer.class, @selector(translationInView:), (IMP)DPPan_translationInView);
+    DPHookClass(object_getClass(NSEvent.class), @selector(addLocalMonitorForEventsMatchingMask:handler:), (IMP)DPEvent_addLocalMonitor);
+    DPHook(DPDiaWindow, @selector(convertPointFromScreen:), (IMP)DPWindow_convertPointFromScreen);
 }
 
 DP_PATCH(DPSidebarOnRight) {
@@ -65,7 +88,7 @@ DP_PATCH(DPSidebarOnRight) {
     .symbol = @"sidebar.right",
     .tint = @"systemTealColor",
     .section = @"Sidebar & Tab Bar",
-    .classes = DPClasses(DPDiaContentContainer, DPDiaSidebarRoot, DPDiaSidebarResize, DPDiaWindowBackground, DPDiaWindowBackgroundTile),
+    .classes = DPClasses(DPDiaContentContainer, DPDiaSidebarRoot, DPDiaSidebarResize, DPDiaFloatingSidebar, DPDiaWindow, DPDiaWindowBackground, DPDiaWindowBackgroundTile),
     .install = DPInstallSidebarOnRight,
     .apply = DPApplySidebarOnRight,
     .verify = DPVerifySidebarOnRight,
