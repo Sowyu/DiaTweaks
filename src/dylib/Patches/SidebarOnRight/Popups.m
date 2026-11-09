@@ -1,6 +1,9 @@
 #import "StdPatch/StdPatch.h"
 
 extern DPPatch DPSidebarOnRight;
+CGFloat DPPageShift(NSWindow *window);
+
+static char DPPopoverOriginKey;
 
 // Dia opens some panels from the sidebar toward the page, which is to the sidebar's right when it's on the left. On the
 // right they'd open past the window's edge: a panel beside what it opened from, like a pinned tab's card beside the
@@ -47,7 +50,18 @@ static void DPPopup_setFrameTopLeftPoint(NSWindow *self, SEL _cmd, NSPoint point
     DPCallOriginal(DPPopup_setFrameTopLeftPoint, self, NSMakePoint(NSMinX(frame), NSMaxY(frame)));
 }
 
+// Dia places ⌘L's popover from where it thinks the address field is, as if the sidebar were still on the left, so it
+// moves with the page. Edit Address in Toolbar places it over the field itself instead.
+static void DPAddressPopover_setFrameOrigin(NSView *self, SEL _cmd, NSPoint origin) {
+    NSPoint dia = [DPDiaValue(self, &DPPopoverOriginKey, [NSValue valueWithPoint:origin]) pointValue], ours = dia;
+    DPPatch *inToolbar = DPPatchNamed(@"addressInToolbar");
+    if (DPSidebarOnRight.on && !(inToolbar && inToolbar->on) && DPIsKind(self.window, DPDiaWindow)) ours.x += DPPageShift(self.window);
+    DPOverride(self, &DPPopoverOriginKey, [NSValue valueWithPoint:dia], [NSValue valueWithPoint:ours]);
+    DPCallOriginal(DPAddressPopover_setFrameOrigin, self, ours);
+}
+
 void DPInstallSidebarPopups(void) {
+    DPHook(DPDiaPopover, @selector(setFrameOrigin:), (IMP)DPAddressPopover_setFrameOrigin);
     for (const char *const *name = DPClasses(DPDiaOverflowMenu, DPDiaPinnedTabCard, DPDiaDropdownPanel); *name; name++) {
         DPHook(*name, @selector(setFrame:display:), (IMP)DPPopup_setFrame);
         DPHook(*name, @selector(setFrameOrigin:), (IMP)DPPopup_setFrameOrigin);
