@@ -4,12 +4,27 @@ static const CGFloat DPToolbarHoverHeight = 8;
 static const NSTimeInterval DPPeekDuration = 1.6;  // Long enough for Dia's Copied message to come and go.
 static char DPHoverKey;
 
+// Dia slides the sidebar in and out over 0.2s on cubic-bezier(0.5, 1.2, 0.5, 1), so the toolbar moves the same way.
+const CFTimeInterval DPSidebarDuration = 0.2;
+
+CGFloat DPSidebarCurve(CGFloat t) {
+    if (t <= 0 || t >= 1) return MIN(MAX(t, 0), 1);
+    CGFloat lo = 0, hi = 1, s = t;
+    for (int i = 0; i < 24; i++) {  // The curve's x only grows, so halving finds the s with x(s) = t.
+        s = (lo + hi) / 2;
+        CGFloat x = 3 * (1 - s) * (1 - s) * s * 0.5 + 3 * (1 - s) * s * s * 0.5 + s * s * s;
+        if (x < t) lo = s;
+        else hi = s;
+    }
+    return 3 * (1 - s) * (1 - s) * s * 1.2 + 3 * (1 - s) * s * s + s * s * s;
+}
+
 static NSTimer *DPEase(CGFloat from, CGFloat to, void (^step)(CGFloat value, BOOL done)) {
     CFTimeInterval start = CACurrentMediaTime();
     NSTimer *timer = [NSTimer timerWithTimeInterval:1.0 / 120 repeats:YES block:^(NSTimer *timer) {
-        CGFloat t = MIN(1, (CACurrentMediaTime() - start) / 0.25);
+        CGFloat t = MIN(1, (CACurrentMediaTime() - start) / DPSidebarDuration);
         if (t == 1) [timer invalidate];
-        step(from + (to - from) * t * t * (3 - 2 * t), t == 1);
+        step(from + (to - from) * DPSidebarCurve(t), t == 1);
     }];
     [NSRunLoop.mainRunLoop addTimer:timer forMode:NSRunLoopCommonModes];
     return timer;
