@@ -34,6 +34,11 @@ static NSImage *DPSymbolImage(NSString *icon, CGFloat size) {
 - (NSView *)hitTest:(NSPoint)point {
     return nil;
 }
+
+// Dia's item already reads the profile's name, which the symbol's own description, like "itunes u", would drown out.
+- (BOOL)isAccessibilityElement {
+    return NO;
+}
 @end
 
 // One view per host, an image view for a symbol or a label for an emoji; nil kind removes it.
