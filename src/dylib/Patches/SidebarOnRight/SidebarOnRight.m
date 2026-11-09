@@ -1,16 +1,19 @@
 #import "StdPatch/StdPatch.h"
+#include <mach-o/dyld.h>
 
 extern DPPatch DPSidebarOnRight;
 
 static char DPFrameKey, DPDiaFrameKey;
 static NSHashTable<NSView *> *DPMirrored;
-static BOOL DPInMouseMonitor;
 
 // Dia lays the window out with the sidebar on the left. Each of these views is flipped across its parent as Dia places
 // it: the page, the sidebar, the sidebar's resize edge inside it, the sidebar that floats out while it's hidden, and the
 // window backgrounds behind them.
+static BOOL DPFloatsRight(void);
+
 static BOOL DPShouldMirror(NSView *view) {
     if (DPIsKind(view, DPDiaWindowBackgroundTile)) return DPIsKind(view.superview, DPDiaWindowBackground);
+    if (DPIsKind(view, DPDiaFloatingSidebar)) return DPFloatsRight();  // It floats out on the side its hover check watches.
     return YES;
 }
 
@@ -36,23 +39,21 @@ static NSPoint DPPan_translationInView(NSPanGestureRecognizer *self, SEL _cmd, N
     return point;
 }
 
-// While the sidebar is hidden, Dia floats it out when its mouse-moved monitors find the cursor at the window's left edge.
-// One reads the cursor's place on screen and another the event's place in the window, so inside mouse-moved monitors
-// both are mirrored across the Dia window the cursor is over.
-static id DPEvent_addLocalMonitor(id self, SEL _cmd, NSEventMask mask, NSEvent *(^handler)(NSEvent *)) {
-    if (mask != NSEventMaskMouseMoved || !handler) return DPCallOriginal(DPEvent_addLocalMonitor, self, mask, handler);
-    return DPCallOriginal(DPEvent_addLocalMonitor, self, mask, ^NSEvent *(NSEvent *event) {
-        BOOL outer = DPInMouseMonitor;
-        DPInMouseMonitor = YES;
-        NSEvent *result = handler(event);
-        DPInMouseMonitor = outer;
-        return result;
-    });
+// While the sidebar is hidden, Dia floats it out when one function finds the cursor at the window's left edge, from a
+// mouse monitor and from a timer. Only that function's read of the cursor is mirrored across the window, so the right
+// edge opens it and nothing else in Dia sees a mirrored cursor. Dia's code has no symbols, so the function is known by
+// where it calls from in one Dia build; on any other build the hidden sidebar keeps floating out on the left.
+// ponytail: pinned to one Dia build, find the new return address with a call-stack log of +[NSEvent mouseLocation]
+// when Dia updates.
+static uintptr_t DPHoverCheck;
+
+static BOOL DPFloatsRight(void) {
+    return DPSidebarOnRight.on && DPHoverCheck;
 }
 
 static NSPoint DPEvent_mouseLocation(id self, SEL _cmd) {
     NSPoint point = DPCallOriginal(DPEvent_mouseLocation, self);
-    if (!DPInMouseMonitor || !DPSidebarOnRight.on) return point;
+    if (!DPFloatsRight() || (uintptr_t)__builtin_return_address(0) != DPHoverCheck) return point;
     for (NSWindow *window in NSApp.orderedWindows) {
         if (!NSPointInRect(point, window.frame)) continue;
         if (DPIsKind(window, DPDiaWindow)) point.x = NSMinX(window.frame) + NSMaxX(window.frame) - point.x;
@@ -61,11 +62,11 @@ static NSPoint DPEvent_mouseLocation(id self, SEL _cmd) {
     return point;
 }
 
-static NSPoint DPEvent_locationInWindow(NSEvent *self, SEL _cmd) {
-    NSPoint point = DPCallOriginal(DPEvent_locationInWindow, self);
-    NSWindow *window = DPInMouseMonitor && DPSidebarOnRight.on ? self.window : nil;
-    if (DPIsKind(window, DPDiaWindow)) point.x = NSWidth(window.frame) - point.x;
-    return point;
+static void DPFindHoverCheck(void) {
+    NSDictionary<NSString *, NSNumber *> *checks = @{ @"90312" : @0x8e062c };  // Dia build: return address in Dia's executable
+    NSNumber *offset = checks[NSBundle.mainBundle.infoDictionary[@"CFBundleVersion"]];
+    if (offset && [@(_dyld_get_image_name(0)) hasSuffix:@"/Contents/MacOS/Dia"])
+        DPHoverCheck = (uintptr_t)_dyld_get_image_header(0) + offset.unsignedLongValue;
 }
 
 static void DPApplySidebarOnRight(DPPatch *patch) {
@@ -90,9 +91,8 @@ static void DPInstallSidebarOnRight(void) {
     for (const char *const *name = DPClasses(DPDiaContentContainer, DPDiaSidebarRoot, DPDiaSidebarResize, DPDiaFloatingSidebar, DPDiaWindowBackgroundTile); *name; name++)
         DPHook(*name, @selector(setFrame:), (IMP)DPMirror_setFrame);
     DPHookClass(NSPanGestureRecognizer.class, @selector(translationInView:), (IMP)DPPan_translationInView);
-    DPHookClass(object_getClass(NSEvent.class), @selector(addLocalMonitorForEventsMatchingMask:handler:), (IMP)DPEvent_addLocalMonitor);
-    DPHookClass(object_getClass(NSEvent.class), @selector(mouseLocation), (IMP)DPEvent_mouseLocation);
-    DPHookClass(NSEvent.class, @selector(locationInWindow), (IMP)DPEvent_locationInWindow);
+    DPFindHoverCheck();
+    if (DPHoverCheck) DPHookClass(object_getClass(NSEvent.class), @selector(mouseLocation), (IMP)DPEvent_mouseLocation);
 }
 
 DP_PATCH(DPSidebarOnRight) {
