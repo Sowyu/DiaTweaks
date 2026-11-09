@@ -60,17 +60,44 @@ static void DPRefreshShadows(NSView *toolbar) {
 }
 
 // Dia fills the address field with the page's color, which looks like a hole on the window, so it takes a light tint of
-// the text color instead, like the window's other controls.
+// the text color instead, like the window's other controls. Dia sets that color again on its own, on hover and as pages
+// load, so the field's layer gets a subclass of its own that keeps Dia's latest color and shows the tint while this is on.
+static CGColorRef DPFieldColor(CALayer *layer, CGColorRef dia) {
+    NSView *fill = (NSView *)layer.delegate;
+    if (!DPToolbarOnWindow.on || ![fill isKindOfClass:NSView.class]) return dia;
+    __block CGColorRef tint = dia;
+    [fill.effectiveAppearance performAsCurrentDrawingAppearance:^{ tint = [NSColor.labelColor colorWithAlphaComponent:0.08].CGColor; }];
+    return tint;
+}
+
+static void DPFieldLayer_setBackgroundColor(CALayer *self, SEL _cmd, CGColorRef color) {
+    DPSet(self, &DPFieldColorKey, (__bridge id)color);
+    IMP set = class_getMethodImplementation(class_getSuperclass(object_getClass(self)), _cmd);
+    ((void (*)(id, SEL, CGColorRef))set)(self, _cmd, DPFieldColor(self, color));
+}
+
 static void DPTintField(NSView *toolbar) {
     NSView *field = DPFindView(toolbar, ^BOOL(NSView *view) { return DPIsKind(view, DPDiaAddressField); });
-    NSView *fill = DPSubview(field, "ARCUI.FlippedView");
-    CALayer *layer = fill.layer;
+    CALayer *layer = DPSubview(field, "ARCUI.FlippedView").layer;
     if (!layer) return;
-    __block CGColorRef tint = NULL;
-    [fill.effectiveAppearance performAsCurrentDrawingAppearance:^{ tint = [NSColor.labelColor colorWithAlphaComponent:0.08].CGColor; }];
-    id dia = DPDiaValue(layer, &DPFieldColorKey, (__bridge id)layer.backgroundColor), ours = DPToolbarOnWindow.on && tint ? (__bridge id)tint : dia;
-    DPOverride(layer, &DPFieldColorKey, dia, ours);
-    if (!CGColorEqualToColor(layer.backgroundColor, (__bridge CGColorRef)ours)) layer.backgroundColor = (__bridge CGColorRef)ours;
+    Class base = object_getClass(layer);
+    NSString *baseName = NSStringFromClass(base);
+    if ([baseName hasPrefix:@"NSKVONotifying_"]) {  // Already a runtime subclass, which isn't safe to swap.
+        layer.backgroundColor = DPFieldColor(layer, layer.backgroundColor);
+        return;
+    }
+    if (![baseName hasPrefix:@"DPTintedField_"]) {
+        NSString *name = [@"DPTintedField_" stringByAppendingString:baseName];
+        Class tinted = NSClassFromString(name);
+        if (!tinted) {
+            tinted = objc_allocateClassPair(base, name.UTF8String, 0);
+            class_addMethod(tinted, @selector(setBackgroundColor:), (IMP)DPFieldLayer_setBackgroundColor, "v@:^{CGColor=}");
+            objc_registerClassPair(tinted);
+        }
+        DPSet(layer, &DPFieldColorKey, (__bridge id)layer.backgroundColor);
+        object_setClass(layer, tinted);
+    }
+    layer.backgroundColor = (__bridge CGColorRef)DPGet(layer, &DPFieldColorKey);
 }
 
 static void DPToolbar_layout(NSView *self, SEL _cmd) {
