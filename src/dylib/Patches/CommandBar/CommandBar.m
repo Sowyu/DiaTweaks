@@ -685,6 +685,12 @@ static void DPInstallCommandBar(void) {
     DPHook(DPDiaAssistantPanel, @selector(setFrame:), (IMP)DPPanel_setFrame);
     DPHook(DPDiaCommandBarSuggestions, @selector(invalidateIntrinsicContentSize), (IMP)DPSuggestions_invalidateIntrinsicContentSize);
     DPHook(DPDiaCapabilityButton, @selector(mouseDown:), (IMP)DPCapability_mouseDown);
+    // Choosing New Tab from the menu bar asks for one too.
+    [NSNotificationCenter.defaultCenter addObserverForName:NSMenuWillSendActionNotification object:nil queue:nil usingBlock:^(NSNotification *note) {
+        NSString *title = [note.userInfo[@"MenuItem"] title];
+        if ([title isEqual:@"New Tab"] || [title isEqual:@"Open Command Bar"])
+            DPSet(NSApp.mainWindow ?: NSApp.keyWindow, &DPAskedAtKey, @(NSProcessInfo.processInfo.systemUptime));
+    }];
 }
 
 #pragma mark Settings rows
