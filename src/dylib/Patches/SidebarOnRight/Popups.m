@@ -3,8 +3,13 @@
 extern DPPatch DPSidebarOnRight;
 
 // Dia opens some panels from the sidebar toward the page, which is to the sidebar's right when it's on the left. On the
-// right they'd open past the window's edge: a panel beside the sidebar, like a pinned tab's card, moves to its other
-// side, and one that starts over the sidebar, like Recent tabs, moves back inside the window.
+// right they'd open past the window's edge: a panel beside what it opened from, like a pinned tab's card beside the
+// sidebar or History beside Recent tabs, moves to that thing's other side, and one that starts over the sidebar, like
+// Recent tabs, moves back inside the window.
+static BOOL DPIsPopup(NSWindow *window) {
+    return DPIsKind(window, DPDiaOverflowMenu) || DPIsKind(window, DPDiaPinnedTabCard) || DPIsKind(window, DPDiaDropdownPanel);
+}
+
 static NSRect DPSidebarOnScreen(NSWindow *window) {
     for (const char *const *name = DPClasses(DPDiaSidebarRoot, DPDiaFloatingSidebar); *name; name++)
         for (NSView *sidebar in DPFindViews(*name))
@@ -14,10 +19,17 @@ static NSRect DPSidebarOnScreen(NSWindow *window) {
 }
 
 static NSRect DPPopupFrame(NSWindow *popup, NSRect frame) {
-    NSWindow *window = popup.parentWindow ?: NSApp.keyWindow;
+    NSWindow *window = popup.parentWindow;
+    while (window && !DPIsKind(window, DPDiaWindow)) window = window.parentWindow;  // A panel opened from another panel.
+    window = window ?: NSApp.mainWindow;
     if (!DPSidebarOnRight.on || !DPIsKind(window, DPDiaWindow)) return frame;
-    NSRect sidebar = DPSidebarOnScreen(window);
-    if (!NSIsEmptyRect(sidebar) && NSMinX(frame) >= NSMaxX(sidebar) - 1) frame.origin.x = NSMinX(sidebar) + NSMaxX(sidebar) - NSMaxX(frame);
+    NSRect from = DPSidebarOnScreen(window);
+    for (NSWindow *other in NSApp.orderedWindows)
+        if (other != popup && other.isVisible && DPIsPopup(other) && NSMaxX(other.frame) <= NSMinX(frame) + 1 && NSMaxX(other.frame) > NSMinX(frame) - 40) {
+            from = other.frame;
+            break;
+        }
+    if (!NSIsEmptyRect(from) && NSMinX(frame) >= NSMaxX(from) - 1) frame.origin.x = NSMinX(from) + NSMaxX(from) - NSMaxX(frame);
     else if (NSMaxX(frame) > NSMaxX(window.frame)) frame.origin.x = NSMaxX(window.frame) - NSWidth(frame);
     return frame;
 }
