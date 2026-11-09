@@ -36,9 +36,9 @@ static NSPoint DPPan_translationInView(NSPanGestureRecognizer *self, SEL _cmd, N
     return point;
 }
 
-// While the sidebar is hidden, Dia floats it out when a mouse-moved monitor finds the cursor at the window's left edge.
-// That monitor reads the cursor's place on screen, so inside mouse-moved monitors the cursor is mirrored across the
-// Dia window it's over.
+// While the sidebar is hidden, Dia floats it out when its mouse-moved monitors find the cursor at the window's left edge.
+// One reads the cursor's place on screen and another the event's place in the window, so inside mouse-moved monitors
+// both are mirrored across the Dia window the cursor is over.
 static id DPEvent_addLocalMonitor(id self, SEL _cmd, NSEventMask mask, NSEvent *(^handler)(NSEvent *)) {
     if (mask != NSEventMaskMouseMoved || !handler) return DPCallOriginal(DPEvent_addLocalMonitor, self, mask, handler);
     return DPCallOriginal(DPEvent_addLocalMonitor, self, mask, ^NSEvent *(NSEvent *event) {
@@ -58,6 +58,13 @@ static NSPoint DPEvent_mouseLocation(id self, SEL _cmd) {
         if (DPIsKind(window, DPDiaWindow)) point.x = NSMinX(window.frame) + NSMaxX(window.frame) - point.x;
         break;
     }
+    return point;
+}
+
+static NSPoint DPEvent_locationInWindow(NSEvent *self, SEL _cmd) {
+    NSPoint point = DPCallOriginal(DPEvent_locationInWindow, self);
+    NSWindow *window = DPInMouseMonitor && DPSidebarOnRight.on ? self.window : nil;
+    if (DPIsKind(window, DPDiaWindow)) point.x = NSWidth(window.frame) - point.x;
     return point;
 }
 
@@ -85,6 +92,7 @@ static void DPInstallSidebarOnRight(void) {
     DPHookClass(NSPanGestureRecognizer.class, @selector(translationInView:), (IMP)DPPan_translationInView);
     DPHookClass(object_getClass(NSEvent.class), @selector(addLocalMonitorForEventsMatchingMask:handler:), (IMP)DPEvent_addLocalMonitor);
     DPHookClass(object_getClass(NSEvent.class), @selector(mouseLocation), (IMP)DPEvent_mouseLocation);
+    DPHookClass(NSEvent.class, @selector(locationInWindow), (IMP)DPEvent_locationInWindow);
 }
 
 DP_PATCH(DPSidebarOnRight) {
