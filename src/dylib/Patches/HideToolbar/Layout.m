@@ -53,7 +53,22 @@ NSString *DPVerifyKeptInPlace(DPPatch *patch) {
     return nil;
 }
 
-static CGFloat DPHidden(DPToolbarHover *hover) { return DPHideToolbar.progress * (1 - hover.inPlaceProgress); }
+// Turning the patch on or off eases its progress with the spring every patch shares. So the toolbar slides like the
+// sidebar, its share of the way goes back to the time the spring took, and from there onto the sidebar's curve.
+static CGFloat DPLikeSidebar(CGFloat progress, BOOL hiding) {
+    CGFloat share = hiding ? progress : 1 - progress;
+    if (share <= 0 || share >= 1) return progress;
+    CGFloat lo = 0, hi = 0.5;
+    for (int i = 0; i < 24; i++) {
+        CGFloat t = (lo + hi) / 2, omega = 22;  // StdPatch's spring.
+        if (1 - (1 + omega * t) * exp(-omega * t) < share) lo = t;
+        else hi = t;
+    }
+    CGFloat eased = DPSidebarCurve(MIN(1, lo / DPSidebarDuration));
+    return hiding ? eased : 1 - eased;
+}
+
+static CGFloat DPHidden(DPToolbarHover *hover) { return DPLikeSidebar(DPHideToolbar.progress, DPHideToolbar.on) * (1 - hover.inPlaceProgress); }
 
 void DPApplyToolbarOpacity(DPToolbarHover *hover) {
     CGFloat alpha = 1 - DPHidden(hover) * (1 - hover.progress);

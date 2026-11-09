@@ -27,6 +27,8 @@ NSString *DPVerifyKeptInPlace(DPPatch *patch);
 void DPApplyToolbar(NSView *pane);
 void DPApplyToolbarOpacity(DPToolbarHover *hover);
 void DPRelayoutPanes(void);
+extern const CFTimeInterval DPSidebarDuration;
+CGFloat DPSidebarCurve(CGFloat t);  // Dia's curve for sliding the sidebar, t from 0 to 1; it overshoots a little.
 void DPRepaintTabs(NSWindow *window);
 
 void DPShowCopyToast(NSView *pane, NSString *message);
