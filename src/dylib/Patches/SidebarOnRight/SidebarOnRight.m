@@ -37,7 +37,8 @@ static NSPoint DPPan_translationInView(NSPanGestureRecognizer *self, SEL _cmd, N
 }
 
 // While the sidebar is hidden, Dia floats it out when a mouse-moved monitor finds the cursor at the window's left edge.
-// That monitor reads where the cursor is in the window, so inside mouse-moved monitors the window answers mirrored.
+// That monitor reads the cursor's place on screen, so inside mouse-moved monitors the cursor is mirrored across the
+// Dia window it's over.
 static id DPEvent_addLocalMonitor(id self, SEL _cmd, NSEventMask mask, NSEvent *(^handler)(NSEvent *)) {
     if (mask != NSEventMaskMouseMoved || !handler) return DPCallOriginal(DPEvent_addLocalMonitor, self, mask, handler);
     return DPCallOriginal(DPEvent_addLocalMonitor, self, mask, ^NSEvent *(NSEvent *event) {
@@ -49,10 +50,15 @@ static id DPEvent_addLocalMonitor(id self, SEL _cmd, NSEventMask mask, NSEvent *
     });
 }
 
-static NSPoint DPWindow_convertPointFromScreen(NSWindow *self, SEL _cmd, NSPoint point) {
-    NSPoint inWindow = DPCallOriginal(DPWindow_convertPointFromScreen, self, point);
-    if (DPInMouseMonitor && DPSidebarOnRight.on) inWindow.x = NSWidth(self.frame) - inWindow.x;
-    return inWindow;
+static NSPoint DPEvent_mouseLocation(id self, SEL _cmd) {
+    NSPoint point = DPCallOriginal(DPEvent_mouseLocation, self);
+    if (!DPInMouseMonitor || !DPSidebarOnRight.on) return point;
+    for (NSWindow *window in NSApp.orderedWindows) {
+        if (!NSPointInRect(point, window.frame)) continue;
+        if (DPIsKind(window, DPDiaWindow)) point.x = NSMinX(window.frame) + NSMaxX(window.frame) - point.x;
+        break;
+    }
+    return point;
 }
 
 static void DPApplySidebarOnRight(DPPatch *patch) {
@@ -78,7 +84,7 @@ static void DPInstallSidebarOnRight(void) {
         DPHook(*name, @selector(setFrame:), (IMP)DPMirror_setFrame);
     DPHookClass(NSPanGestureRecognizer.class, @selector(translationInView:), (IMP)DPPan_translationInView);
     DPHookClass(object_getClass(NSEvent.class), @selector(addLocalMonitorForEventsMatchingMask:handler:), (IMP)DPEvent_addLocalMonitor);
-    DPHook(DPDiaWindow, @selector(convertPointFromScreen:), (IMP)DPWindow_convertPointFromScreen);
+    DPHookClass(object_getClass(NSEvent.class), @selector(mouseLocation), (IMP)DPEvent_mouseLocation);
 }
 
 DP_PATCH(DPSidebarOnRight) {
