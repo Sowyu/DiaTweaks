@@ -59,8 +59,10 @@ static BOOL DPIsHoverRead(uintptr_t address) {
 static NSPoint DPEvent_mouseLocation(id self, SEL _cmd) {
     NSPoint point = DPCallOriginal(DPEvent_mouseLocation, self);
     if (!DPFloatsRight() || !DPIsHoverRead((uintptr_t)__builtin_return_address(0))) return point;
+    // The check also counts the cursor past the window's edge, up to the screen's, so the window is the frontmost one
+    // level with the cursor rather than one under it.
     for (NSWindow *window in NSApp.orderedWindows) {
-        if (!NSPointInRect(point, window.frame)) continue;
+        if (!window.isVisible || point.y < NSMinY(window.frame) || point.y > NSMaxY(window.frame)) continue;
         if (DPIsKind(window, DPDiaWindow)) point.x = NSMinX(window.frame) + NSMaxX(window.frame) - point.x;
         break;
     }
