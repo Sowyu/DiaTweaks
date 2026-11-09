@@ -48,6 +48,7 @@ void DPSetTrim(NSView *container, CGFloat trim) {
 
 void DPApplyCompactCommandBar(DPPatch *patch) {
     for (NSView *commandBar in DPFindViews(DPDiaCommandBar)) commandBar.needsLayout = YES;
+    for (NSView *panel in DPFindViews(DPDiaAssistantPanel)) panel.needsLayout = YES;  // Its corners.
 }
 
 static NSString *DPVerifyCompactCommandBar(DPPatch *patch) {
