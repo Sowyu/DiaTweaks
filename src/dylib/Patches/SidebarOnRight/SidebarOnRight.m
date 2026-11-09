@@ -80,6 +80,13 @@ static void DPFindHoverReads(void) {
     for (int i = 0; i < 3; i++) DPHoverReads[i] = (uintptr_t)_dyld_get_image_header(0) + offsets[i].unsignedLongValue;
 }
 
+// How far the page moved from where Dia put it, for things Dia places from its own idea of the layout.
+CGFloat DPPageShift(NSWindow *window) {
+    for (NSView *view in DPMirrored.allObjects)
+        if (view.window == window && DPIsKind(view, DPDiaContentContainer)) return NSMinX(view.frame) - NSMinX([DPGet(view, &DPDiaFrameKey) rectValue]);
+    return 0;
+}
+
 static void DPApplySidebarOnRight(DPPatch *patch) {
     for (NSView *view in DPMirrored.allObjects) {
         view.frame = [DPGet(view, &DPDiaFrameKey) rectValue];
