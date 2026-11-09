@@ -39,21 +39,26 @@ static NSPoint DPPan_translationInView(NSPanGestureRecognizer *self, SEL _cmd, N
     return point;
 }
 
-// While the sidebar is hidden, Dia floats it out when one function finds the cursor at the window's left edge, from a
-// mouse monitor and from a timer. Only that function's read of the cursor is mirrored across the window, so the right
-// edge opens it and nothing else in Dia sees a mirrored cursor. Dia's code has no symbols, so the function is known by
-// where it calls from in one Dia build; on any other build the hidden sidebar keeps floating out on the left.
-// ponytail: pinned to one Dia build, find the new return address with a call-stack log of +[NSEvent mouseLocation]
+// While the sidebar is hidden, Dia floats it out when its hover check finds the cursor at the window's left edge, run
+// from a mouse monitor and from a timer. Only the hover check's reads of the cursor are mirrored across the window, so
+// the right edge opens it and nothing else in Dia sees a mirrored cursor. Dia's code has no symbols, so the reads are
+// known by where they return to in one Dia build; on any other build the hidden sidebar keeps floating out on the left.
+// ponytail: pinned to one Dia build, find the new return addresses with a call-stack log of +[NSEvent mouseLocation]
 // when Dia updates.
-static uintptr_t DPHoverCheck;
+static uintptr_t DPHoverReads[3];
 
 static BOOL DPFloatsRight(void) {
-    return DPSidebarOnRight.on && DPHoverCheck;
+    return DPSidebarOnRight.on && DPHoverReads[0];
+}
+
+static BOOL DPIsHoverRead(uintptr_t address) {
+    for (int i = 0; i < 3; i++) if (address == DPHoverReads[i]) return YES;
+    return NO;
 }
 
 static NSPoint DPEvent_mouseLocation(id self, SEL _cmd) {
     NSPoint point = DPCallOriginal(DPEvent_mouseLocation, self);
-    if (!DPFloatsRight() || (uintptr_t)__builtin_return_address(0) != DPHoverCheck) return point;
+    if (!DPFloatsRight() || !DPIsHoverRead((uintptr_t)__builtin_return_address(0))) return point;
     for (NSWindow *window in NSApp.orderedWindows) {
         if (!NSPointInRect(point, window.frame)) continue;
         if (DPIsKind(window, DPDiaWindow)) point.x = NSMinX(window.frame) + NSMaxX(window.frame) - point.x;
@@ -62,11 +67,12 @@ static NSPoint DPEvent_mouseLocation(id self, SEL _cmd) {
     return point;
 }
 
-static void DPFindHoverCheck(void) {
-    NSDictionary<NSString *, NSNumber *> *checks = @{ @"90312" : @0x8e062c };  // Dia build: return address in Dia's executable
-    NSNumber *offset = checks[NSBundle.mainBundle.infoDictionary[@"CFBundleVersion"]];
-    if (offset && [@(_dyld_get_image_name(0)) hasSuffix:@"/Contents/MacOS/Dia"])
-        DPHoverCheck = (uintptr_t)_dyld_get_image_header(0) + offset.unsignedLongValue;
+static void DPFindHoverReads(void) {
+    // Dia build: where the hover check's reads return to in Dia's executable.
+    NSDictionary<NSString *, NSArray<NSNumber *> *> *reads = @{ @"90312" : @[ @0x8cd5e0, @0x8cd5f8, @0x8e062c ] };
+    NSArray<NSNumber *> *offsets = reads[NSBundle.mainBundle.infoDictionary[@"CFBundleVersion"]];
+    if (!offsets || ![@(_dyld_get_image_name(0)) hasSuffix:@"/Contents/MacOS/Dia"]) return;
+    for (int i = 0; i < 3; i++) DPHoverReads[i] = (uintptr_t)_dyld_get_image_header(0) + offsets[i].unsignedLongValue;
 }
 
 static void DPApplySidebarOnRight(DPPatch *patch) {
@@ -91,8 +97,8 @@ static void DPInstallSidebarOnRight(void) {
     for (const char *const *name = DPClasses(DPDiaContentContainer, DPDiaSidebarRoot, DPDiaSidebarResize, DPDiaFloatingSidebar, DPDiaWindowBackgroundTile); *name; name++)
         DPHook(*name, @selector(setFrame:), (IMP)DPMirror_setFrame);
     DPHookClass(NSPanGestureRecognizer.class, @selector(translationInView:), (IMP)DPPan_translationInView);
-    DPFindHoverCheck();
-    if (DPHoverCheck) DPHookClass(object_getClass(NSEvent.class), @selector(mouseLocation), (IMP)DPEvent_mouseLocation);
+    DPFindHoverReads();
+    if (DPHoverReads[0]) DPHookClass(object_getClass(NSEvent.class), @selector(mouseLocation), (IMP)DPEvent_mouseLocation);
 }
 
 DP_PATCH(DPSidebarOnRight) {
