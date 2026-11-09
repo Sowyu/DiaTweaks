@@ -675,6 +675,12 @@ static void DPInstallCommandBar(void) {
     DPHook(DPDiaAssistantPanel, @selector(setFrame:), (IMP)DPPanel_setFrame);
     DPHook(DPDiaCommandBarSuggestions, @selector(invalidateIntrinsicContentSize), (IMP)DPSuggestions_invalidateIntrinsicContentSize);
     DPHook(DPDiaCapabilityButton, @selector(mouseDown:), (IMP)DPCapability_mouseDown);
+    // Placed against the screen, a bar laid out while its window was off it, as window managers park windows on another
+    // space, stays clamped to the window's edge until it's laid out again. Moving the window doesn't do that by itself.
+    for (NSNotificationName name in @[ NSWindowDidMoveNotification, NSWindowDidChangeScreenNotification ])
+        [NSNotificationCenter.defaultCenter addObserverForName:name object:nil queue:nil usingBlock:^(NSNotification *note) {
+            [(NSView *)DPGet(note.object, &DPOverlayKey) setNeedsLayout:YES];
+        }];
 }
 
 #pragma mark Settings rows

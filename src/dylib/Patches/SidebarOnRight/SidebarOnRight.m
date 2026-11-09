@@ -3,6 +3,8 @@
 
 extern DPPatch DPSidebarOnRight;
 void DPInstallSidebarPopups(void);
+void DPInstallSidebarButton(void);
+void DPApplySidebarButton(void);
 
 static char DPFrameKey, DPDiaFrameKey;
 static NSHashTable<NSView *> *DPMirrored;
@@ -83,6 +85,7 @@ static void DPApplySidebarOnRight(DPPatch *patch) {
         view.frame = [DPGet(view, &DPDiaFrameKey) rectValue];
         view.superview.needsLayout = YES;
     }
+    DPApplySidebarButton();
 }
 
 static NSString *DPVerifySidebarOnRight(DPPatch *patch) {
@@ -103,6 +106,7 @@ static void DPInstallSidebarOnRight(void) {
     DPFindHoverReads();
     if (DPHoverReads[0]) DPHookClass(object_getClass(NSEvent.class), @selector(mouseLocation), (IMP)DPEvent_mouseLocation);
     DPInstallSidebarPopups();
+    DPInstallSidebarButton();
 }
 
 DP_PATCH(DPSidebarOnRight) {
