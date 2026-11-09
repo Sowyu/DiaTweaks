@@ -28,15 +28,19 @@ static void DPShadow_setFrame(NSView *self, SEL _cmd, NSRect frame) {
 
 // On the window, the toolbar's row runs from the window's top edge to the card, so the window's padding above the page
 // goes and the bar sits as far from the window's edge as from the card.
-static void DPContainer_setFrame(NSView *self, SEL _cmd, NSRect frame) {
-    NSRect dia = [DPDiaValue(self, &DPContainerFrameKey, @(frame)) rectValue], ours = dia;
-    NSView *superview = self.superview;
+static NSRect DPContainerFrame(NSView *container, NSRect dia) {
+    NSView *superview = container.superview;
     CGFloat top = superview.isFlipped ? NSMinY(dia) - NSMinY(superview.bounds) : NSMaxY(superview.bounds) - NSMaxY(dia);
-    NSView *toolbar = DPFindView(self, ^BOOL(NSView *view) { return DPIsKind(view, DPDiaToolbar); });
+    NSView *toolbar = DPFindView(container, ^BOOL(NSView *view) { return DPIsKind(view, DPDiaToolbar); });
     if (DPToolbarOnWindow.on && superview && fabs(top - DPWindowGap) < 0.5 && toolbar && !toolbar.isHiddenOrHasHiddenAncestor && toolbar.alphaValue > 0) {
-        ours.size.height += DPWindowGap;
-        if (superview.isFlipped) ours.origin.y -= DPWindowGap;
+        dia.size.height += DPWindowGap;
+        if (superview.isFlipped) dia.origin.y -= DPWindowGap;
     }
+    return dia;
+}
+
+static void DPContainer_setFrame(NSView *self, SEL _cmd, NSRect frame) {
+    NSRect dia = [DPDiaValue(self, &DPContainerFrameKey, @(frame)) rectValue], ours = DPContainerFrame(self, dia);
     DPOverride(self, &DPContainerFrameKey, @(dia), @(ours));
     DPCallOriginal(DPContainer_setFrame, self, ours);
 }
@@ -47,8 +51,10 @@ static void DPRefreshShadows(NSView *toolbar) {
         for (NSView *sibling in view.subviews)
             if (DPIsKind(sibling, DPDiaShadowView)) sibling.frame = [DPDiaValue(sibling, &DPShadowFrameKey, @(sibling.frame)) rectValue];
         if (!DPIsKind(view, DPDiaContentContainer)) continue;
-        NSRect frame = [DPDiaValue(view, &DPContainerFrameKey, @(view.frame)) rectValue];
-        if (DPMayAdjust(view)) view.frame = frame;
+        // Dia places the container again, so a patch that moves it, like Sidebar on Right, sees Dia's own frame.
+        NSArray<NSValue *> *frames = DPGet(view, &DPContainerFrameKey);
+        NSRect want = frames ? DPContainerFrame(view, frames[0].rectValue) : view.frame;
+        if (frames && (NSHeight(want) != NSHeight(frames[1].rectValue))) view.superview.needsLayout = YES;
         break;
     }
 }
