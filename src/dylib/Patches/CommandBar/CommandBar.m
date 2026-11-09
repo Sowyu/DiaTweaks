@@ -1,7 +1,7 @@
 #import "StdPatch/StdPatch.h"
 
-extern DPPatch DPCommandBar, DPCommandBarBlur, DPCommandBarDarken, DPCommandBarKeepText;
-static char DPOverlayKey, DPHomeKey, DPRecentKey, DPBlankKey, DPSplitKey, DPOwnBarKey, DPLeftTextKey, DPClosedAtKey;
+extern DPPatch DPCommandBar, DPCommandBarBlur, DPCommandBarDarken, DPCommandBarKeepText, DPCommandBarEmpty;
+static char DPOverlayKey, DPHomeKey, DPRecentKey, DPBlankKey, DPSplitKey, DPOwnBarKey, DPLeftTextKey, DPClosedAtKey, DPAskedAtKey;
 
 static NSString *const DPHeightKey = @"commandBarHeight", *const DPDarknessKey = @"commandBarDarkness",
                 *const DPBlurRadiusKey = @"commandBarBlurRadius", *const DPBlurWindowKey = @"commandBarBlurWindow";
@@ -519,6 +519,7 @@ static void DPCapability_mouseDown(NSView *self, SEL _cmd, NSEvent *event) {
 }
 
 static void DPNewTabButton_mouseDown(NSView *self, SEL _cmd, NSEvent *event) {
+    DPSet(self.window, &DPAskedAtKey, @(NSProcessInfo.processInfo.systemUptime));
     if (!DPOpenOverBlank(self.window)) DPCallOriginal(DPNewTabButton_mouseDown, self, event);
 }
 
@@ -527,6 +528,7 @@ static NSEvent *DPCommandBarKey(NSEvent *event) {
     if (!DPCommandBar.on || !window) return event;
     if (DPIsShortcut(event, @"Close Tab")) DPSet(window, &DPClosedAtKey, @(event.timestamp));
     if (!(DPIsShortcut(event, @"New Tab") || DPIsShortcut(event, @"Open Command Bar"))) return event;
+    DPSet(window, &DPAskedAtKey, @(NSProcessInfo.processInfo.systemUptime));
     DPCommandBarOverlay *overlay = DPGet(window, &DPOverlayKey);
     if (overlay) DPFocusBar(overlay);
     return overlay || DPOpenOverBlank(window) ? nil : event;
@@ -606,6 +608,14 @@ static void DPNewTabPage_viewDidMoveToWindow(NSView *self, SEL _cmd) {
     if (active && ([blanks containsObject:active] || closing)) {
         DPMakeBlank(self);
         if (overlay.returnTab && !DPScriptTab(window, DPTabID(overlay.returnTab))) DPCancelCommandBar(overlay);
+        return;
+    }
+    // Only a new tab asked for opens the bar. One Dia opens by itself, as after the last tab closes or at launch, stays empty.
+    NSNumber *askedAt = DPGet(window, &DPAskedAtKey);
+    DPSet(window, &DPAskedAtKey, nil);
+    BOOL asked = askedAt && NSProcessInfo.processInfo.systemUptime - askedAt.doubleValue < 2;
+    if (DPCommandBarEmpty.on && !asked && !overlay && active) {
+        DPMakeBlank(self);
         return;
     }
     if (overlay) DPCancelCommandBar(overlay);
@@ -827,4 +837,15 @@ DP_PATCH(DPCommandBarKeepText) {
     .tint = @"systemOrangeColor",
     .requires = @"commandBar",
     .section = @"Typing",
+};
+
+DP_PATCH(DPCommandBarEmpty) {
+    .key = @"commandBarEmptyTabs",
+    .order = 91,
+    .title = @"Leave Other New Tabs Empty",
+    .detail = @"Only open the bar for a new tab you ask for. One Dia opens by itself, like after you close the last tab or at launch, stays empty.",
+    .symbol = @"rectangle.dashed",
+    .tint = @"systemOrangeColor",
+    .requires = @"commandBar",
+    .section = @"New Tabs",
 };
